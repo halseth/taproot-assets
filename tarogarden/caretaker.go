@@ -341,7 +341,14 @@ func (b *BatchCaretaker) seedlingsToAssetSprouts(ctx context.Context,
 		// If emission is enabled without a group key specified,
 		// then we'll need to generate another public key,
 		// then use that to derive the key group signature
+
+		// If emission is enabled, then we'll need to generate another
+		// public key, then use that to derive the key group signature
+
 		// along with the tweaked key group.
+		var (
+			genesisWitness wire.TxWitness = nil
+		)
 		if seedling.EnableEmission {
 			rawGroupKey, err := b.cfg.KeyRing.DeriveNextKey(
 				ctx, asset.TaroKeyFamily,
@@ -357,6 +364,13 @@ func (b *BatchCaretaker) seedlingsToAssetSprouts(ctx context.Context,
 			if err != nil {
 				return nil, fmt.Errorf("unable to"+
 					"tweak group key: %v", err)
+			}
+
+			// When emission is enabled, place the raw group key and
+			// signature in the genesis witness.
+			genesisWitness = wire.TxWitness{
+				rawGroupKey.PubKey.SerializeCompressed(),
+				groupKey.Sig.Serialize(),
 			}
 		}
 
@@ -378,6 +392,7 @@ func (b *BatchCaretaker) seedlingsToAssetSprouts(ctx context.Context,
 			return nil, fmt.Errorf("unable to create new asset: %v",
 				err)
 		}
+		newAsset.PrevWitnesses[0].TxWitness = genesisWitness
 
 		// Finally make a new asset commitment (the inner SMT tree) for
 		// this newly created asset.
