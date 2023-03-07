@@ -406,7 +406,7 @@ func NewMockGenSigner(keyRing *MockKeyRing) *MockGenSigner {
 }
 
 func (m *MockGenSigner) SignGenesis(desc keychain.KeyDescriptor,
-	initialGen asset.Genesis, currentGen *asset.Genesis) (*btcec.PublicKey,
+	initialGen asset.Genesis, currentGen *asset.Genesis) (
 	*schnorr.Signature, error) {
 
 	priv := m.KeyRing.Keys[desc.KeyLocator]

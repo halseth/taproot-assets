@@ -4,9 +4,7 @@ import (
 	"context"
 	"fmt"
 
-	"github.com/btcsuite/btcd/btcec/v2"
 	"github.com/btcsuite/btcd/btcec/v2/schnorr"
-	"github.com/btcsuite/btcd/txscript"
 	"github.com/lightninglabs/lndclient"
 	"github.com/lightninglabs/taro/asset"
 	"github.com/lightningnetwork/lnd/keychain"
@@ -33,12 +31,8 @@ func NewLndRpcGenSigner(lnd *lndclient.LndServices) *LndRpcGenSigner {
 // needed, since we tweak with and sign over the same Genesis object.
 // The final tweaked public key and the signature are returned.
 func (l *LndRpcGenSigner) SignGenesis(keyDesc keychain.KeyDescriptor,
-	initialGen asset.Genesis, currentGen *asset.Genesis) (*btcec.PublicKey,
+	initialGen asset.Genesis, currentGen *asset.Genesis) (
 	*schnorr.Signature, error) {
-
-	tweakedPubKey := txscript.ComputeTaprootOutputKey(
-		keyDesc.PubKey, initialGen.GroupKeyTweak(),
-	)
 
 	// If the current genesis is not set, we are minting the first asset in
 	// the group. This means that we use the same Genesis object for both
@@ -48,7 +42,7 @@ func (l *LndRpcGenSigner) SignGenesis(keyDesc keychain.KeyDescriptor,
 	id := initialGen.ID()
 	if currentGen != nil {
 		if initialGen.Type != currentGen.Type {
-			return nil, nil, fmt.Errorf(
+			return nil, fmt.Errorf(
 				"cannot sign genesis with group key for " +
 					"different asset type",
 			)
@@ -62,15 +56,15 @@ func (l *LndRpcGenSigner) SignGenesis(keyDesc keychain.KeyDescriptor,
 		lndclient.SignSchnorr(initialGen.GroupKeyTweak()),
 	)
 	if err != nil {
-		return nil, nil, err
+		return nil, err
 	}
 
 	schnorrSig, err := schnorr.ParseSignature(sig)
 	if err != nil {
-		return nil, nil, fmt.Errorf("unable to parse schnorr sig: %w",
+		return nil, fmt.Errorf("unable to parse schnorr sig: %w",
 			err)
 	}
-	return tweakedPubKey, schnorrSig, nil
+	return schnorrSig, nil
 }
 
 // A compile time assertion to ensure LndRpcGenSigner meets the

@@ -541,7 +541,7 @@ type GenesisSigner interface {
 	// needed, since we tweak with and sign over the same Genesis object.
 	// The final tweaked public key and the signature are returned.
 	SignGenesis(keychain.KeyDescriptor, Genesis,
-		*Genesis) (*btcec.PublicKey, *schnorr.Signature, error)
+		*Genesis) (*schnorr.Signature, error)
 }
 
 // RawKeyGenesisSigner implements the GenesisSigner interface using a raw
@@ -558,6 +558,16 @@ func NewRawKeyGenesisSigner(priv *btcec.PrivateKey) *RawKeyGenesisSigner {
 	}
 }
 
+func GroupKeyFromGenesis(keyDesc keychain.KeyDescriptor,
+	initialGen Genesis) (*btcec.PublicKey, error) {
+
+	tweakedPubKey := txscript.ComputeTaprootOutputKey(
+		keyDesc.PubKey, initialGen.GroupKeyTweak(),
+	)
+
+	return tweakedPubKey, nil
+}
+
 // SignGenesis tweaks the public key identified by the passed key
 // descriptor with the the first passed Genesis description, and signs
 // the second passed Genesis description with the tweaked public key.
@@ -565,11 +575,10 @@ func NewRawKeyGenesisSigner(priv *btcec.PrivateKey) *RawKeyGenesisSigner {
 // needed, since we tweak with and sign over the same Genesis object.
 // The final tweaked public key and the signature are returned.
 func (r *RawKeyGenesisSigner) SignGenesis(keyDesc keychain.KeyDescriptor,
-	initialGen Genesis, currentGen *Genesis) (*btcec.PublicKey,
-	*schnorr.Signature, error) {
+	initialGen Genesis, currentGen *Genesis) (*schnorr.Signature, error) {
 
 	if !keyDesc.PubKey.IsEqual(r.privKey.PubKey()) {
-		return nil, nil, fmt.Errorf("cannot sign with key")
+		return nil, fmt.Errorf("cannot sign with key")
 	}
 
 	tweakedPrivKey := txscript.TweakTaprootPrivKey(
@@ -584,7 +593,7 @@ func (r *RawKeyGenesisSigner) SignGenesis(keyDesc keychain.KeyDescriptor,
 	id := initialGen.ID()
 	if currentGen != nil {
 		if initialGen.Type != currentGen.Type {
-			return nil, nil, fmt.Errorf(
+			return nil, fmt.Errorf(
 				"cannot sign genesis with group key for " +
 					"different asset type",
 			)
@@ -598,10 +607,10 @@ func (r *RawKeyGenesisSigner) SignGenesis(keyDesc keychain.KeyDescriptor,
 	idHash := sha256.Sum256(id[:])
 	sig, err := schnorr.Sign(tweakedPrivKey, idHash[:])
 	if err != nil {
-		return nil, nil, err
+		return nil, err
 	}
 
-	return tweakedPrivKey.PubKey(), sig, nil
+	return sig, nil
 }
 
 // A compile-time assertion to ensure RawKeyGenesisSigner meets the
@@ -613,7 +622,12 @@ var _ GenesisSigner = (*RawKeyGenesisSigner)(nil)
 func DeriveGroupKey(genSigner GenesisSigner, rawKey keychain.KeyDescriptor,
 	initialGen Genesis, currentGen *Genesis) (*GroupKey, error) {
 
-	groupPubKey, sig, err := genSigner.SignGenesis(
+	groupPubKey, err := GroupKeyFromGenesis(rawKey, initialGen)
+	if err != nil {
+		return nil, err
+	}
+
+	sig, err := genSigner.SignGenesis(
 		rawKey, initialGen, currentGen,
 	)
 	if err != nil {
