@@ -217,9 +217,10 @@ func (p *Proof) verifyAssetStateTransition(ctx context.Context,
 					"signature: %w", err)
 			}
 
-			tweakedGroupKey := txscript.ComputeTaprootOutputKey(
-				rawKey, p.Asset.GroupKeyTweak(),
+			tweakedGroupKey := asset.GroupKeyFromGenesis(
+				rawKey, prev.Asset.Genesis,
 			)
+
 			// Make sure we got the expected group key.
 			if !tweakedGroupKey.IsEqual(&newAsset.GroupKey.GroupPubKey) {
 				return nil, fmt.Errorf("unexpected group key")

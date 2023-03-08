@@ -53,7 +53,8 @@ func (l *LndRpcGenSigner) SignGenesis(keyDesc keychain.KeyDescriptor,
 
 	sig, err := l.lnd.Signer.SignMessage(
 		context.Background(), id[:], keyDesc.KeyLocator,
-		lndclient.SignSchnorr(initialGen.GroupKeyTweak()),
+		// TODO: must add correct tweaks when moving to input signing.
+		lndclient.SignSchnorr([]byte{}),
 	)
 	if err != nil {
 		return nil, err

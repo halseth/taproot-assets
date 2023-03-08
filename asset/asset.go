@@ -14,6 +14,7 @@ import (
 	"github.com/btcsuite/btcd/txscript"
 	"github.com/btcsuite/btcd/wire"
 	"github.com/lightninglabs/taro/mssmt"
+	"github.com/lightningnetwork/lnd/input"
 	"github.com/lightningnetwork/lnd/keychain"
 	"github.com/lightningnetwork/lnd/tlv"
 )
@@ -149,16 +150,6 @@ func (g Genesis) ID() ID {
 	_ = binary.Write(h, binary.BigEndian, g.OutputIndex)
 	_ = binary.Write(h, binary.BigEndian, g.Type)
 	return *(*ID)(h.Sum(nil))
-}
-
-// GroupKeyTweak returns the tweak bytes that commit to the previous outpoint,
-// output index and type of the genesis.
-func (g Genesis) GroupKeyTweak() []byte {
-	var keyGroupBytes bytes.Buffer
-	_ = wire.WriteOutPoint(&keyGroupBytes, 0, 0, &g.FirstPrevOut)
-	_ = binary.Write(&keyGroupBytes, binary.BigEndian, g.OutputIndex)
-	_ = binary.Write(&keyGroupBytes, binary.BigEndian, g.Type)
-	return keyGroupBytes.Bytes()
 }
 
 // VerifySignature verifies the given signature that it is valid over the
@@ -531,6 +522,40 @@ func NewScriptKeyBIP0086(rawKey keychain.KeyDescriptor) ScriptKey {
 	}
 }
 
+func GroupKeyFromGenesis(rawKey *btcec.PublicKey,
+	initialGen Genesis) *btcec.PublicKey {
+
+	// We first tweak the raw key with the asset ID.
+	assetID := initialGen.ID()
+	internalGroupKey := input.TweakPubKeyWithTweak(rawKey, assetID[:])
+
+	// Then finally add the optional script root as a tap tweak.
+	// TODO: support non-empty script root.
+	scriptRoot := []byte{}
+	groupKey := txscript.ComputeTaprootOutputKey(
+		internalGroupKey, scriptRoot,
+	)
+
+	return groupKey
+}
+
+func GroupPrivKeyFromGenesis(privKey *btcec.PrivateKey,
+	initialGen Genesis) (*btcec.PrivateKey, *btcec.PrivateKey) {
+
+	// We first tweak the raw key with the asset ID.
+	assetID := initialGen.ID()
+	internalGroupKey := input.TweakPrivKey(privKey, assetID[:])
+
+	// Then finally add the optional script root as a tap tweak.
+	// TODO: support non-empty script root.
+	scriptRoot := []byte{}
+	groupPrivKey := txscript.TweakTaprootPrivKey(
+		*internalGroupKey, scriptRoot,
+	)
+
+	return internalGroupKey, groupPrivKey
+}
+
 // GenesisSigner is used to sign the assetID using the group key public key
 // for a given asset.
 type GenesisSigner interface {
@@ -558,16 +583,6 @@ func NewRawKeyGenesisSigner(priv *btcec.PrivateKey) *RawKeyGenesisSigner {
 	}
 }
 
-func GroupKeyFromGenesis(keyDesc keychain.KeyDescriptor,
-	initialGen Genesis) (*btcec.PublicKey, error) {
-
-	tweakedPubKey := txscript.ComputeTaprootOutputKey(
-		keyDesc.PubKey, initialGen.GroupKeyTweak(),
-	)
-
-	return tweakedPubKey, nil
-}
-
 // SignGenesis tweaks the public key identified by the passed key
 // descriptor with the the first passed Genesis description, and signs
 // the second passed Genesis description with the tweaked public key.
@@ -581,8 +596,8 @@ func (r *RawKeyGenesisSigner) SignGenesis(keyDesc keychain.KeyDescriptor,
 		return nil, fmt.Errorf("cannot sign with key")
 	}
 
-	tweakedPrivKey := txscript.TweakTaprootPrivKey(
-		*r.privKey, initialGen.GroupKeyTweak(),
+	_, groupPrivKey := GroupPrivKeyFromGenesis(
+		r.privKey, initialGen,
 	)
 
 	// If the current genesis is not set, we are minting the first asset in
@@ -605,7 +620,7 @@ func (r *RawKeyGenesisSigner) SignGenesis(keyDesc keychain.KeyDescriptor,
 	// TODO(roasbeef): this actually needs to sign the digest of the asset
 	// itself
 	idHash := sha256.Sum256(id[:])
-	sig, err := schnorr.Sign(tweakedPrivKey, idHash[:])
+	sig, err := schnorr.Sign(groupPrivKey, idHash[:])
 	if err != nil {
 		return nil, err
 	}
@@ -622,10 +637,7 @@ var _ GenesisSigner = (*RawKeyGenesisSigner)(nil)
 func DeriveGroupKey(genSigner GenesisSigner, rawKey keychain.KeyDescriptor,
 	initialGen Genesis, currentGen *Genesis) (*GroupKey, error) {
 
-	groupPubKey, err := GroupKeyFromGenesis(rawKey, initialGen)
-	if err != nil {
-		return nil, err
-	}
+	groupPubKey := GroupKeyFromGenesis(rawKey.PubKey, initialGen)
 
 	sig, err := genSigner.SignGenesis(
 		rawKey, initialGen, currentGen,
