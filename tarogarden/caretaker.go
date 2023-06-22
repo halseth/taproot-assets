@@ -328,14 +328,15 @@ func (b *BatchCaretaker) seedlingsToAssetSprouts(ctx context.Context,
 		// sign the new genesis with that group key.
 		if seedling.HasGroupKey() {
 			groupKey, err = asset.DeriveGroupKey(
-				b.cfg.GenSigner,
 				seedling.GroupInfo.GroupKey.RawKey,
-				*seedling.GroupInfo.Genesis, &assetGen,
+				*seedling.GroupInfo.Genesis,
 			)
 			if err != nil {
 				return nil, fmt.Errorf("unable to"+
 					"tweak group key: %v", err)
 			}
+
+			// TODO: here we must sign the virtual tx with the original group key
 		}
 
 		// If emission is enabled without a group key specified,
@@ -350,6 +351,17 @@ func (b *BatchCaretaker) seedlingsToAssetSprouts(ctx context.Context,
 			genesisWitness wire.TxWitness = nil
 		)
 		if seedling.EnableEmission {
+			// TODO: we must store this for later.
+			// A: it is stored in the GroupKey struct
+			//
+			// Game plan:
+			// - tweak the raw key the new way, with empty script
+			// root and asset id, and store as before (maybe need to
+			// add dummy storage for script but maybe not if we know
+			// it is empty).
+			// - fix signature creation using the virtual tx method, add sig to witness.
+			// - add the reveal to the proof when creating.
+			// - verify the group key sig when verifying proof at genesis.
 			rawGroupKey, err := b.cfg.KeyRing.DeriveNextKey(
 				ctx, asset.TaroKeyFamily,
 			)
@@ -358,8 +370,7 @@ func (b *BatchCaretaker) seedlingsToAssetSprouts(ctx context.Context,
 					"derive group key: %v", err)
 			}
 			groupKey, err = asset.DeriveGroupKey(
-				b.cfg.GenSigner, rawGroupKey,
-				assetGen, nil,
+				rawGroupKey, assetGen,
 			)
 			if err != nil {
 				return nil, fmt.Errorf("unable to"+
@@ -368,10 +379,11 @@ func (b *BatchCaretaker) seedlingsToAssetSprouts(ctx context.Context,
 
 			// When emission is enabled, place the raw group key and
 			// signature in the genesis witness.
-			genesisWitness = wire.TxWitness{
-				rawGroupKey.PubKey.SerializeCompressed(),
-				groupKey.Sig.Serialize(),
-			}
+			// TODO: here we must sign the resulting virtual tx
+			//			genesisWitness = wire.TxWitness{
+			//				rawGroupKey.PubKey.SerializeCompressed(),
+			//				groupKey.Sig.Serialize(),
+			//			}
 		}
 
 		// With the necessary keys components assembled, we'll create
@@ -393,6 +405,7 @@ func (b *BatchCaretaker) seedlingsToAssetSprouts(ctx context.Context,
 				err)
 		}
 		newAsset.PrevWitnesses[0].TxWitness = genesisWitness
+		// TODO: her must sign virtual tx
 
 		// Finally make a new asset commitment (the inner SMT tree) for
 		// this newly created asset.

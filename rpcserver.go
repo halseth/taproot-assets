@@ -327,6 +327,15 @@ func (r *rpcServer) MintAsset(ctx context.Context,
 	req *tarorpc.MintAssetRequest) (*tarorpc.MintAssetResponse, error) {
 
 	// Using a specific group key implies disabling emission.
+	// TODO: rename this set group key, since it will now be the internal
+	// raw key (group key will be this tweaked with teh asset_id and script
+	// root).
+	// No, for second tranche mints you would actually set the group key
+	// directly, and prpvide a valid spend of it.
+
+	// TODO: is this check wrong? No,just confusing. Looks like
+	// enable_emission means this is a new asset, and a group key will be
+	// created by the caretaker.
 	if req.EnableEmission && len(req.GroupKey) != 0 {
 		return nil, fmt.Errorf("must disable emission")
 	}
@@ -348,6 +357,7 @@ func (r *rpcServer) MintAsset(ctx context.Context,
 			return nil, fmt.Errorf("invalid group key: %w", err)
 		}
 
+		// TODO: Here we can set the final group key?
 		seedling.GroupInfo = &asset.AssetGroup{
 			GroupKey: &asset.GroupKey{
 				GroupPubKey: *groupTweakedKey,
@@ -472,7 +482,8 @@ func marshalAsset(a *asset.Asset, withWitness bool) (*tarorpc.Asset, error) {
 		rpcAsset.AssetGroup = &tarorpc.AssetGroup{
 			RawGroupKey:     a.GroupKey.RawKey.PubKey.SerializeCompressed(),
 			TweakedGroupKey: a.GroupKey.GroupPubKey.SerializeCompressed(),
-			AssetIdSig:      a.GroupKey.Sig.Serialize(),
+			// TODO:
+			//AssetIdSig:      a.GroupKey.Sig.Serialize(),
 		}
 	}
 

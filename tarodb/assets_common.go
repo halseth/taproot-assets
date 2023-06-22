@@ -258,7 +258,8 @@ func upsertGroupKey(ctx context.Context, groupKey *asset.GroupKey,
 	//
 	// TODO(roasbeef): sig here doesn't actually matter?
 	groupSigID, err := q.UpsertAssetGroupSig(ctx, AssetGroupSig{
-		GenesisSig: groupKey.Sig.Serialize(),
+		// TODO:
+		//GenesisSig: groupKey.Sig.Serialize(),
 		GenAssetID: genAssetID,
 		GroupKeyID: groupID,
 	})

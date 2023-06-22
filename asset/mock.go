@@ -32,11 +32,8 @@ func RandGroupKey(t testing.TB, genesis Genesis) *GroupKey {
 	privateKey, err := btcec.NewPrivateKey()
 	require.NoError(t, err)
 
-	genSigner := NewRawKeyGenesisSigner(privateKey)
-
 	groupKey, err := DeriveGroupKey(
-		genSigner, test.PubToKeyDesc(privateKey.PubKey()),
-		genesis, nil,
+		test.PubToKeyDesc(privateKey.PubKey()), genesis,
 	)
 	require.NoError(t, err)
 	return groupKey

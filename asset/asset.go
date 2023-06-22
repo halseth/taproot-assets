@@ -218,6 +218,7 @@ type PrevID struct {
 	// the possible spending conditions of the asset. PrevID is being used
 	// as map keys, so we want to only use data types with fixed and
 	// comparable content, which a btcec.PublicKey might not be.
+	// For minting transactions this will be all zeroes.
 	ScriptKey SerializedKey
 }
 
@@ -409,7 +410,8 @@ type GroupKey struct {
 	GroupPubKey btcec.PublicKey
 
 	// Sig is a signature over an asset's ID by `Key`.
-	Sig schnorr.Signature
+	//Sig schnorr.Signature
+	ScriptRoot []byte
 }
 
 // IsEqual returns true if this group key is equivalent to the passed other
@@ -430,8 +432,10 @@ func (g *GroupKey) IsEqual(otherGroupKey *GroupKey) bool {
 		return false
 	}
 
-	return g.GroupPubKey.IsEqual(&otherGroupKey.GroupPubKey) &&
-		g.Sig.IsEqual(&otherGroupKey.Sig)
+	return true
+	// TODO
+	//	return g.GroupPubKey.IsEqual(&otherGroupKey.GroupPubKey) &&
+	//		g.Sig.IsEqual(&otherGroupKey.Sig)
 }
 
 // IsLocal returns true if the private key that corresponds to this group key
@@ -478,6 +482,8 @@ type ScriptKey struct {
 
 	*TweakedScriptKey
 }
+
+var ZeroScriptKey = ScriptKey{}
 
 // IsUnSpendable returns true if this script key is equal to the un-spendable
 // NUMS point.
@@ -634,22 +640,15 @@ var _ GenesisSigner = (*RawKeyGenesisSigner)(nil)
 
 // DeriveGroupKey derives an asset's group key based on an internal public
 // key descriptor, the original group asset genesis, and the asset's genesis.
-func DeriveGroupKey(genSigner GenesisSigner, rawKey keychain.KeyDescriptor,
-	initialGen Genesis, currentGen *Genesis) (*GroupKey, error) {
+func DeriveGroupKey(rawKey keychain.KeyDescriptor,
+	initialGen Genesis) (*GroupKey, error) {
 
 	groupPubKey := GroupKeyFromGenesis(rawKey.PubKey, initialGen)
-
-	sig, err := genSigner.SignGenesis(
-		rawKey, initialGen, currentGen,
-	)
-	if err != nil {
-		return nil, err
-	}
 
 	return &GroupKey{
 		RawKey:      rawKey,
 		GroupPubKey: *groupPubKey,
-		Sig:         *sig,
+		ScriptRoot:  []byte{},
 	}, nil
 }
 
@@ -786,18 +785,6 @@ func (a *Asset) HasGenesisWitness() bool {
 		return false
 	}
 
-	// TODO(halseth): can we just return true at this point?
-
-	// Witness must be either empty (for non-reissuable assets) or on the
-	// form <raw key> <sig> for assets that can be re-issued.
-	if len(witness.TxWitness) != 0 && len(witness.TxWitness) != 2 {
-		return false
-	}
-
-	if witness.SplitCommitment != nil {
-		return false
-	}
-
 	return true
 }
 
@@ -879,11 +866,14 @@ func (a *Asset) Copy() *Asset {
 		copy(assetCopy.ScriptKey.Tweak, a.ScriptKey.Tweak)
 	}
 
+	scriptRoot := make([]byte, len(a.GroupKey.ScriptRoot))
+	copy(scriptRoot[:], a.GroupKey.ScriptRoot[:])
+
 	if a.GroupKey != nil {
 		assetCopy.GroupKey = &GroupKey{
 			RawKey:      a.GroupKey.RawKey,
 			GroupPubKey: a.GroupKey.GroupPubKey,
-			Sig:         a.GroupKey.Sig,
+			ScriptRoot:  scriptRoot,
 		}
 	}
 

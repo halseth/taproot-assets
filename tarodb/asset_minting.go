@@ -8,7 +8,6 @@ import (
 	"strings"
 
 	"github.com/btcsuite/btcd/btcec/v2"
-	"github.com/btcsuite/btcd/btcec/v2/schnorr"
 	"github.com/btcsuite/btcd/btcutil/psbt"
 	"github.com/btcsuite/btcd/chaincfg/chainhash"
 	"github.com/btcsuite/btcd/wire"
@@ -447,10 +446,10 @@ func fetchAssetSprouts(ctx context.Context, q PendingAssetStore,
 			if err != nil {
 				return nil, err
 			}
-			groupSig, err := schnorr.ParseSignature(sprout.GenesisSig)
-			if err != nil {
-				return nil, err
-			}
+			//			groupSig, err := schnorr.ParseSignature(sprout.GenesisSig)
+			//			if err != nil {
+			//				return nil, err
+			//			}
 
 			groupKey = &asset.GroupKey{
 				RawKey: keychain.KeyDescriptor{
@@ -467,7 +466,8 @@ func fetchAssetSprouts(ctx context.Context, q PendingAssetStore,
 					},
 				},
 				GroupPubKey: *tweakedGroupKey,
-				Sig:         *groupSig,
+				// TODO: scriptroot
+				//Sig:         *groupSig,
 			}
 		}
 

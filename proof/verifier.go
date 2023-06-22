@@ -8,7 +8,6 @@ import (
 	"sync"
 
 	"github.com/btcsuite/btcd/btcec/v2"
-	"github.com/btcsuite/btcd/btcec/v2/schnorr"
 	"github.com/btcsuite/btcd/txscript"
 	"github.com/btcsuite/btcd/wire"
 	"github.com/lightninglabs/taro/asset"
@@ -190,51 +189,123 @@ func (p *Proof) verifyAssetStateTransition(ctx context.Context,
 			}: prev.Asset,
 		}
 	} else {
+		// TODO: if prev is nil, this must be minting. Prev_ID must be
+		// prev_out|asset_id|<[32]0..0> (depending on if we have group key or not).
+		// Note that prev_out == genesis_outpoint and is already
+		// committed to by the assetID. group_key commits to the
+		// original asset id from the first tranche (will be equal if
+		// this is the first tranche).
+		// Asset should be set to a copy of the new asset, where script
+		// key is the group key. Since that will be used during state
+		// transtition.
+		// TODO: how to easily determine this is a minting transaction without having blank prevout?
+		// 	- zero script hash: prev_out|asset_id|000...000. Know it must be a mint, since script hash all zeroes.
+		// 		- we use zeroes intead of empty, since when hashing it will expect to find 32 bytes here
+		// 		- TODO: is it a problem if we don't commit to the group key here?
+		//		The group key is already set in the output
+		//		asset leaf, and will be used as the script hash during state
+		//		transition. In case there is no group key this
+		//		will just be a single mint asset, and there is no need to
+		//		check the valid input signature (no witness to check), but
+		//		perhaps we should have a simple op_true replacement or
+		//		something to not have to special case it..
+		// 	- prev_out|asset_id|asset_id: potentially dangerous,
+		// 	since user can set script hash to asset_id, making a normal
+		// 	transfer look like a mint
+		assetCopy := p.Asset.Copy()
+		assetCopy.PrevWitnesses = nil
+
+		if p.Asset.GroupKey != nil {
+			assetCopy.ScriptKey = asset.NewScriptKey(
+				&p.Asset.GroupKey.GroupPubKey,
+			)
+		} else {
+			assetCopy.ScriptKey = asset.ZeroScriptKey
+		}
+
+		prevAssets = commitment.InputSet{
+			asset.PrevID{
+				OutPoint:  p.PrevOut, // Is this defined at genesis proof? Could use genesis instead
+				ID:        newAsset.Genesis.ID(),
+				ScriptKey: asset.SerializedKey{}, // Empty key
+			}: assetCopy,
+		}
+		// TODO: enforce prevout == genesis
+
 		// If we had no previous assets, this must be a minting
 		// transaction.
 		//
 		// If the asset has a group key specified, verify there must be
-		// a valid signature in the witness.
-		if p.Asset.GroupKey != nil {
-			// Verify signature over asset ID from genesis witness.
-			if len(p.Asset.PrevWitnesses[0].TxWitness) != 2 {
-				return nil, fmt.Errorf("unexpected number of " +
-					"witness elements")
-			}
-
-			rawKeyBytes := p.Asset.PrevWitnesses[0].TxWitness[0]
-			rawSigBytes := p.Asset.PrevWitnesses[0].TxWitness[1]
-
-			rawKey, err := btcec.ParsePubKey(rawKeyBytes)
-			if err != nil {
-				return nil, fmt.Errorf("unable to parse raw "+
-					"pubkey: %w", err)
-			}
-
-			sig, err := schnorr.ParseSignature(rawSigBytes)
-			if err != nil {
-				return nil, fmt.Errorf("unable to parse raw "+
-					"signature: %w", err)
-			}
-
-			tweakedGroupKey := asset.GroupKeyFromGenesis(
-				rawKey, prev.Asset.Genesis,
-			)
-
-			// Make sure we got the expected group key.
-			if !tweakedGroupKey.IsEqual(&newAsset.GroupKey.GroupPubKey) {
-				return nil, fmt.Errorf("unexpected group key")
-			}
-
-			if !p.Asset.Genesis.VerifySignature(sig, tweakedGroupKey) {
-				return nil, fmt.Errorf("invalid genesis signature")
-			}
-		} else {
-			// No group key set, witness must be empty.
-			if len(p.Asset.PrevWitnesses[0].TxWitness) != 0 {
-				return nil, fmt.Errorf("unexpected witness elements")
-			}
-		}
+		// a valid signature for this group key in the witness.
+		//		if p.Asset.GroupKey != nil {
+		//			// we must set the prev assets such that virtual tx will validate against the group key.
+		//			mintingPrev := p.Asset.Copy()
+		//			mintingPrev.ScriptKey = asset.ScriptKey{
+		//				PubKey: &p.Asset.GroupKey.GroupPubKey,
+		//				TweakedScriptKey: &asset.TweakedScriptKey{
+		//					RawKey: p.Asset.GroupKey.RawKey,
+		//					// TODO:
+		//					Tweak: nil,
+		//				},
+		//			}
+		//			prevAssets = commitment.InputSet{
+		//				asset.ZeroPrevID: mintingPrev,
+		//				//					&asset.Asset{
+		//				//					Version:             0,
+		//				//					Genesis:             asset.Genesis{},
+		//				//					Amount:              0,
+		//				//					LockTime:            0,
+		//				//					RelativeLockTime:    0,
+		//				//					PrevWitnesses:       nil,
+		//				//					SplitCommitmentRoot: nil,
+		//				//					ScriptVersion:       0,
+		//				//					ScriptKey:           asset.ScriptKey{},
+		//				//					GroupKey:            nil,
+		//				//				},
+		//			}
+		//
+		//			// Verify with initial genesis that the group key is correctly derived.
+		//			// TODO: is this only necessary at initial genesis?
+		//
+		//			// Verify signature over asset ID from genesis witness.
+		//			if len(p.Asset.PrevWitnesses[0].TxWitness) != 2 {
+		//				return nil, fmt.Errorf("unexpected number of " +
+		//					"witness elements")
+		//			}
+		//
+		//			rawKeyBytes := p.Asset.PrevWitnesses[0].TxWitness[0]
+		//			rawSigBytes := p.Asset.PrevWitnesses[0].TxWitness[1]
+		//
+		//			rawKey, err := btcec.ParsePubKey(rawKeyBytes)
+		//			if err != nil {
+		//				return nil, fmt.Errorf("unable to parse raw "+
+		//					"pubkey: %w", err)
+		//			}
+		//
+		//			sig, err := schnorr.ParseSignature(rawSigBytes)
+		//			if err != nil {
+		//				return nil, fmt.Errorf("unable to parse raw "+
+		//					"signature: %w", err)
+		//			}
+		//
+		//			tweakedGroupKey := asset.GroupKeyFromGenesis(
+		//				rawKey, prev.Asset.Genesis,
+		//			)
+		//
+		//			// Make sure we got the expected group key.
+		//			if !tweakedGroupKey.IsEqual(&newAsset.GroupKey.GroupPubKey) {
+		//				return nil, fmt.Errorf("unexpected group key")
+		//			}
+		//
+		//			if !p.Asset.Genesis.VerifySignature(sig, tweakedGroupKey) {
+		//				return nil, fmt.Errorf("invalid genesis signature")
+		//			}
+		//		} else {
+		//			// No group key set, witness must be empty.
+		//			if len(p.Asset.PrevWitnesses[0].TxWitness) != 0 {
+		//				return nil, fmt.Errorf("unexpected witness elements")
+		//			}
+		//		}
 	}
 
 	// We'll use an err group to be able to validate all the inputs in
@@ -283,6 +354,11 @@ func (p *Proof) verifyAssetStateTransition(ctx context.Context,
 		return nil, err
 	}
 	return splitAsset, engine.Execute()
+}
+
+func (p *Proof) verifyGroupKeyReveal() error {
+	// TODO: check group key derivation.
+	return nil
 }
 
 // HeaderVerifier is a callback function which returns an error if the given
@@ -344,6 +420,28 @@ func (p *Proof) Verify(ctx context.Context, prev *AssetSnapshot,
 	// included.
 	if err := p.verifyExclusionProofs(); err != nil {
 		return nil, err
+	}
+
+	hasGroupKeyReveal := p.GroupKeyReveal != nil
+	// TODO: must be genesis, not second tranche
+	isGenesisAsset := p.Asset.HasGenesisWitness()
+	switch {
+	// If this asset doesn't have a genesis witness, and it includes a
+	// group key reveal, then we deem this to be invalid.
+	case !isGenesisAsset && hasGroupKeyReveal:
+		return nil, ErrNonGenesisAssetWithGroupKeyReveal
+
+	// If this a genesis asset, and it doesn't have a meta reveal (but it
+	// has a non-zero meta hash), then this is invalid.
+	case isGenesisAsset && !hasGroupKeyReveal:
+		return nil, ErrGroupKeyRevealRequired
+
+	// Otherwise, if it has a genesis witness, along with a meta reveal,
+	// then we'll validate that now.
+	case isGenesisAsset && hasGroupKeyReveal:
+		if err := p.verifyGroupKeyReveal(); err != nil {
+			return nil, err
+		}
 	}
 
 	// 5. A set of asset inputs with valid witnesses are included that

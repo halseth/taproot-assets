@@ -411,11 +411,14 @@ func SignVirtualTransaction(vPkt *taropsbt.VPacket, inputIdx int,
 		return err
 	}
 
+	// TODO: here must support minting
+	// check how it is done currently
 	prevAssets := commitment.InputSet{
 		input.PrevID: input.Asset(),
 	}
 	newAsset := outputs[0].Asset
 
+	// TODO: Use this method + sign below?
 	// Create a Taro virtual transaction representing the asset transfer.
 	virtualTx, _, err := VirtualTx(newAsset, prevAssets)
 	if err != nil {

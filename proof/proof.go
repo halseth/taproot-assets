@@ -25,6 +25,11 @@ var (
 	// ErrMissingSplitRootProof is an error returned upon noticing an
 	// inclusion proof for a split root asset is missing.
 	ErrMissingSplitRootProof = errors.New("missing split root proof")
+
+	ErrNonGenesisAssetWithGroupKeyReveal = errors.New("non genesis asset has " +
+		"group keyreveal")
+
+	ErrGroupKeyRevealRequired = errors.New("group key reveal required")
 )
 
 // Proof encodes all of the data necessary to prove a valid state transition for
@@ -63,6 +68,8 @@ type Proof struct {
 	// asset of the split.
 	SplitRootProof *TaprootProof
 
+	GroupKeyReveal *GroupKeyReveal
+
 	// AdditionalInputs is a nested full proof for any additional inputs
 	// found within the resulting asset.
 	AdditionalInputs []File
@@ -87,6 +94,9 @@ func (p *Proof) EncodeRecords() []tlv.Record {
 			&p.SplitRootProof,
 		))
 	}
+	if p.GroupKeyReveal != nil {
+		records = append(records, GroupKeyRevealRecord(&p.GroupKeyReveal))
+	}
 	if len(p.AdditionalInputs) > 0 {
 		records = append(records, AdditionalInputsRecord(
 			&p.AdditionalInputs,
@@ -106,6 +116,7 @@ func (p *Proof) DecodeRecords() []tlv.Record {
 		InclusionProofRecord(&p.InclusionProof),
 		ExclusionProofsRecord(&p.ExclusionProofs),
 		SplitRootProofRecord(&p.SplitRootProof),
+		GroupKeyRevealRecord(&p.GroupKeyReveal),
 		AdditionalInputsRecord(&p.AdditionalInputs),
 	}
 }

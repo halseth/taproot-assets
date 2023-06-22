@@ -226,6 +226,7 @@ func (vm *Engine) validateWitnessV0(virtualTx *wire.MsgTx, inputIdx uint32,
 	// With all the components mapped into a virtual transaction, will
 	// execute it using the normal Tapscript VM, which does most of the
 	// heavy lifting here.
+	// TODO: Genesis input must be mapped
 	engine, err := txscript.NewEngine(
 		prevOut.PkScript, virtualTxCopy, 0, txscript.StandardVerifyFlags,
 		nil, sigHashes, prevOut.Value, prevOutFetcher,
@@ -256,6 +257,9 @@ func (vm *Engine) validateStateTransition(virtualTx *wire.MsgTx) error {
 	}
 
 	for i, witness := range vm.newAsset.PrevWitnesses {
+		// Here prev id can be nil, meaning we are creating a new asset, must instead be ZeroPrevID
+		// Must set witness
+
 		witness := witness
 		prevAsset, ok := vm.prevAssets[*witness.PrevID]
 		if !ok {

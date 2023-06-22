@@ -92,6 +92,8 @@ func NewMintingBlobs(params *MintParams,
 		return nil, err
 	}
 
+	// TODO: must enforce adding group key reveal at genesis.
+
 	ctx := context.Background()
 	blobs := make(AssetBlobs, len(proofs))
 	for key := range proofs {

@@ -19,6 +19,7 @@ const (
 	ExclusionProofsType  tlv.Type = 6
 	SplitRootProofType   tlv.Type = 7
 	AdditionalInputsType tlv.Type = 8
+	GroupKeyRevealType   tlv.Type = 10
 
 	TaprootProofOutputIndexType     tlv.Type = 0
 	TaprootProofInternalKeyType     tlv.Type = 1
@@ -229,4 +230,8 @@ func TapscriptProofBIP86Record(bip86 *bool) tlv.Record {
 	return tlv.MakeStaticRecord(
 		TapscriptProofBIP86, bip86, 1, BoolEncoder, BoolDecoder,
 	)
+}
+
+func GroupKeyRevealRecord(reveal **GroupKeyReveal) tlv.Record {
+	return tlv.MakePrimitiveRecord(GroupKeyRevealType, &(*reveal).data)
 }

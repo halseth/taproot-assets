@@ -97,8 +97,15 @@ func virtualTxIn(newAsset *asset.Asset, prevAssets commitment.InputSet) (
 				return nil, nil, ErrNoInputs
 			}
 
+			// Genesis asset, the asset's group key is used as the script to satisfy.
+			// TODO: make this (prev_outpoint|assetID|groupkey) for minting
+			if *input.PrevID == asset.ZeroPrevID {
+				key := asset.ZeroPrevID.Hash()
+			}
+
 			// The set of prev assets are similar to the prev
 			// output fetcher used in taproot.
+			// Could make an empty asset as prev for minting
 			prevAsset, ok := prevAssets[*input.PrevID]
 			if !ok {
 				return nil, nil, ErrNoInputs
@@ -108,7 +115,17 @@ func virtualTxIn(newAsset *asset.Asset, prevAssets commitment.InputSet) (
 			// The generated leaf includes the amount of the asset,
 			// so the sum of this tree will be the total amount
 			// being spent.
+			// TODO: hash in case of genesis asset should be
+			// defined, as it is needed for the virtual txid.
+			// Since prev ID is zero for genesis assets, how can we
+			// make it unique? Should it reference the outpoint
+			// being spent? (in that case it might make sense to not
+			// have prevID blank be the definition of genesis
+			// assets)
+			// Or perhaps enforce == asset_genesis_outpoint or something
 			key := input.PrevID.Hash()
+
+			// TODO; define empty leaf for minting tx?
 			leaf, err := prevAsset.Leaf()
 			if err != nil {
 				return nil, nil, err
@@ -263,6 +280,7 @@ func InputAssetPrevOut(prevAsset asset.Asset) (*wire.TxOut, error) {
 	switch prevAsset.ScriptVersion {
 	case asset.ScriptV0:
 		var err error
+		// Here group key must be returned for minting tx
 		pkScript, err = PayToTaprootScript(prevAsset.ScriptKey.PubKey)
 		if err != nil {
 			return nil, err

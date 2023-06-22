@@ -108,12 +108,13 @@ func parseCommon(assets ...*asset.Asset) (*AssetCommitment, error) {
 		case assetGroupKey != nil:
 			// There should be a valid Schnorr sig over the asset ID
 			// in the group key struct.
-			validSig := asset.Genesis.VerifySignature(
-				&assetGroupKey.Sig, &assetGroupKey.GroupPubKey,
-			)
-			if !validSig {
-				return nil, ErrAssetGenesisInvalidSig
-			}
+			// TODO
+			//			validSig := asset.Genesis.VerifySignature(
+			//				&assetGroupKey.Sig, &assetGroupKey.GroupPubKey,
+			//			)
+			//			if !validSig {
+			//				return nil, ErrAssetGenesisInvalidSig
+			//			}
 		}
 
 		key := asset.AssetCommitmentKey()

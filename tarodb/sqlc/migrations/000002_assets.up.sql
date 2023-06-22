@@ -44,6 +44,8 @@ CREATE TABLE IF NOT EXISTS genesis_assets (
 
     meta_data BLOB,
 
+    group_key_reveal BLOB,
+
     output_index INTEGER NOT NULL,
 
     -- TODO(roasbeef): make into an enum? also add into asset_id generation?
@@ -51,6 +53,7 @@ CREATE TABLE IF NOT EXISTS genesis_assets (
     asset_type SMALLINT NOT NULL,
 
     genesis_point_id INTEGER NOT NULL REFERENCES genesis_points(genesis_id)
+
 );
 CREATE INDEX IF NOT EXISTS asset_ids on genesis_assets(asset_id);
 
