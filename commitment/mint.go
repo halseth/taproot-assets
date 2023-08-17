@@ -4,6 +4,7 @@ import (
 	"errors"
 	"fmt"
 
+	"github.com/btcsuite/btcd/btcec/v2"
 	"github.com/lightninglabs/taproot-assets/asset"
 	"github.com/lightningnetwork/lnd/keychain"
 )
@@ -32,7 +33,7 @@ type AssetDetails struct {
 }
 
 // mintAssets mints a series of assets based on the same asset ID and group key.
-func mintAssets(genesis asset.Genesis, groupKey *asset.GroupKey,
+func mintAssets(genesis asset.Genesis, groupKey *btcec.PublicKey,
 	mintDetails ...*AssetDetails) ([]*asset.Asset, error) {
 
 	assets := make([]*asset.Asset, 0, len(mintDetails))
@@ -82,7 +83,7 @@ func mintAssets(genesis asset.Genesis, groupKey *asset.GroupKey,
 // Mint mints a series of assets within a new Taproot Asset commitment. The
 // distribution and other parameters of these assets can be specified through
 // `AssetDetails`.
-func Mint(genesis asset.Genesis, groupKey *asset.GroupKey,
+func Mint(genesis asset.Genesis, groupKey *btcec.PublicKey,
 	details ...*AssetDetails) (*TapCommitment, []*asset.Asset, error) {
 
 	assets, err := mintAssets(genesis, groupKey, details...)

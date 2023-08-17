@@ -133,7 +133,12 @@ func (c Seedling) validateFields() error {
 func (c Seedling) validateGroupKey(group asset.AssetGroup) error {
 	// We must be able to sign with the group key.
 	if !group.GroupKey.IsLocal() {
-		groupKeyBytes := c.GroupInfo.GroupPubKey.SerializeCompressed()
+		groupPubKey, err := c.GroupInfo.GroupPubKey()
+		if err != nil {
+			return err
+		}
+
+		groupKeyBytes := groupPubKey.SerializeCompressed()
 		return fmt.Errorf("can't sign with group key %x", groupKeyBytes)
 	}
 

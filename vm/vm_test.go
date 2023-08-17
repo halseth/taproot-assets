@@ -39,7 +39,9 @@ func randAsset(t *testing.T, assetType asset.Type,
 	groupKey := asset.RandGroupKey(t, genesis)
 	scriptKey := asset.NewScriptKey(scriptKeyPub)
 
-	return asset.RandAssetWithValues(t, genesis, groupKey, scriptKey)
+	groupPubKey, _ := groupKey.GroupPubKeyF(genesis.ID())
+
+	return asset.RandAssetWithValues(t, genesis, groupPubKey, scriptKey)
 }
 
 func genTaprootKeySpend(t *testing.T, privKey btcec.PrivateKey,

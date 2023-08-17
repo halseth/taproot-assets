@@ -242,20 +242,9 @@ func (a *Tap) TapCommitment() (*commitment.TapCommitment, error) {
 
 	// We first need to create an asset from the address in order to encode
 	// it in the TLV leaf.
-	var groupKey *asset.GroupKey
-	if a.GroupKey != nil {
-		if len(a.groupWitness) == 0 {
-			return nil, fmt.Errorf("missing group signature")
-		}
-
-		groupKey = &asset.GroupKey{
-			GroupPubKey: *a.GroupKey,
-			Witness:     a.groupWitness,
-		}
-	}
 	newAsset, err := asset.New(
 		a.assetGen, a.Amount, 0, 0, asset.NewScriptKey(&a.ScriptKey),
-		groupKey,
+		a.GroupKey,
 	)
 	if err != nil {
 		return nil, err

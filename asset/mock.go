@@ -5,6 +5,7 @@ import (
 	"encoding/hex"
 	"testing"
 
+	"github.com/btcsuite/btcd/btcec/v2"
 	"github.com/lightninglabs/taproot-assets/internal/test"
 	"github.com/lightninglabs/taproot-assets/mssmt"
 	"github.com/stretchr/testify/require"
@@ -78,15 +79,17 @@ func RandAsset(t testing.TB, assetType Type) *Asset {
 	t.Helper()
 
 	genesis := RandGenesis(t, assetType)
-	familyKey := RandGroupKey(t, genesis)
+	groupKey := RandGroupKey(t, genesis)
 	scriptKey := RandScriptKey(t)
 
-	return RandAssetWithValues(t, genesis, familyKey, scriptKey)
+	groupPubKey, _ := groupKey.GroupPubKeyF(genesis.ID())
+
+	return RandAssetWithValues(t, genesis, groupPubKey, scriptKey)
 }
 
 // RandAssetWithValues creates a random asset with the given genesis and keys
 // for testing.
-func RandAssetWithValues(t testing.TB, genesis Genesis, groupKey *GroupKey,
+func RandAssetWithValues(t testing.TB, genesis Genesis, groupKey *btcec.PublicKey,
 	scriptKey ScriptKey) *Asset {
 
 	t.Helper()
@@ -349,11 +352,11 @@ func (tsc *TestSplitCommitment) ToSplitCommitment(
 	return sc
 }
 
-func NewTestFromGroupKey(t testing.TB, gk *GroupKey) *TestGroupKey {
+func NewTestFromGroupKey(t testing.TB, gk *btcec.PublicKey) *TestGroupKey {
 	t.Helper()
 
 	return &TestGroupKey{
-		GroupKey: test.HexPubKey(&gk.GroupPubKey),
+		GroupKey: test.HexPubKey(gk),
 	}
 }
 
@@ -361,12 +364,10 @@ type TestGroupKey struct {
 	GroupKey string `json:"group_key"`
 }
 
-func (tgk *TestGroupKey) ToGroupKey(t testing.TB) *GroupKey {
+func (tgk *TestGroupKey) ToGroupKey(t testing.TB) *btcec.PublicKey {
 	t.Helper()
 
-	return &GroupKey{
-		GroupPubKey: *test.ParsePubKey(t, tgk.GroupKey),
-	}
+	return test.ParsePubKey(t, tgk.GroupKey)
 }
 
 type TestScriptKey struct {

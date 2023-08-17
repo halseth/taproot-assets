@@ -36,7 +36,7 @@ func RandAddr(t testing.TB, params *ChainParams) (*AddrWithKeyInfo,
 	)
 	if test.RandInt[uint32]()%2 == 0 {
 		groupInfo = asset.RandGroupKey(t, genesis)
-		groupPubKey = &groupInfo.GroupPubKey
+		groupPubKey, _ = groupInfo.GroupPubKeyF(genesis.ID())
 		groupWitness = groupInfo.Witness
 
 		tapscriptSibling = commitment.NewPreimageFromLeaf(

@@ -419,6 +419,10 @@ type AssetGroup struct {
 	*GroupKey
 }
 
+func (a *AssetGroup) GroupPubKey() (*btcec.PublicKey, error) {
+	return a.GroupKey.GroupPubKeyF(a.Genesis.ID())
+}
+
 // GroupKey is the tweaked public key that is used to associate assets together
 // across distinct asset IDs, allowing further issuance of the asset to be made
 // possible.
@@ -468,6 +472,18 @@ func (g *GroupKeyReveal) GroupPubKey(assetID ID) (*btcec.PublicKey, error) {
 	rawKey, err := g.RawKey.ToPubKey()
 	if err != nil {
 		return nil, err
+	}
+
+	internalKey := input.TweakPubKeyWithTweak(rawKey, assetID[:])
+	return txscript.ComputeTaprootOutputKey(internalKey, g.TapscriptRoot[:]), nil
+}
+
+// GroupPubKeyF returns the group public key derived from the group key reveal.
+// TODO: rename
+func (g *GroupKey) GroupPubKeyF(assetID ID) (*btcec.PublicKey, error) {
+	rawKey := g.RawKey.PubKey
+	if rawKey == nil {
+		return nil, fmt.Errorf("unable to derive group pubkey without raw key")
 	}
 
 	internalKey := input.TweakPubKeyWithTweak(rawKey, assetID[:])
@@ -857,7 +873,7 @@ type Asset struct {
 	// GroupKey is the tweaked public key that is used to associate assets
 	// together across distinct asset IDs, allowing further issuance of the
 	// asset to be made possible.
-	GroupKey *GroupKey
+	GroupKey *btcec.PublicKey
 }
 
 // IsUnknownVersion returns true if an asset has a version that is not
@@ -873,7 +889,7 @@ func (a *Asset) IsUnknownVersion() bool {
 
 // New instantiates a new asset with a genesis asset witness.
 func New(genesis Genesis, amount, locktime, relativeLocktime uint64,
-	scriptKey ScriptKey, groupKey *GroupKey) (*Asset, error) {
+	scriptKey ScriptKey, groupKey *btcec.PublicKey) (*Asset, error) {
 
 	// Collectible assets can only ever be issued once.
 	if genesis.Type != Normal && amount != 1 {
@@ -917,7 +933,8 @@ func (a *Asset) TapCommitmentKey() [32]byte {
 	if a.GroupKey == nil {
 		return TapCommitmentKey(a.Genesis.ID(), nil)
 	}
-	return TapCommitmentKey(a.Genesis.ID(), &a.GroupKey.GroupPubKey)
+
+	return TapCommitmentKey(a.Genesis.ID(), a.GroupKey)
 }
 
 // AssetCommitmentKey returns a key which can be used to locate an
@@ -1040,11 +1057,8 @@ func (a *Asset) Copy() *Asset {
 	}
 
 	if a.GroupKey != nil {
-		assetCopy.GroupKey = &GroupKey{
-			RawKey:      a.GroupKey.RawKey,
-			GroupPubKey: a.GroupKey.GroupPubKey,
-			Witness:     a.GroupKey.Witness,
-		}
+		groupKey := *a.GroupKey
+		assetCopy.GroupKey = &groupKey
 	}
 
 	return &assetCopy

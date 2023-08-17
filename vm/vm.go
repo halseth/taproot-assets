@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 
+	"github.com/btcsuite/btcd/btcec/v2"
 	"github.com/btcsuite/btcd/txscript"
 	"github.com/btcsuite/btcd/wire"
 	"github.com/lightninglabs/taproot-assets/asset"
@@ -42,7 +43,7 @@ func New(newAsset *asset.Asset, splitAssets []*commitment.SplitAsset,
 
 // matchesPrevGenesis determines whether certain key parameters of the new
 // asset continue to hold its previous genesis.
-func matchesPrevGenesis(prevID asset.ID, groupKey *asset.GroupKey,
+func matchesPrevGenesis(prevID asset.ID, groupKey *btcec.PublicKey,
 	tag string, prevAsset *asset.Asset) bool {
 
 	switch {

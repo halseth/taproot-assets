@@ -225,7 +225,11 @@ func (b *Book) NewAddressWithKeys(ctx context.Context, assetID asset.ID,
 	)
 
 	if assetGroup.GroupKey != nil {
-		groupKey = &assetGroup.GroupPubKey
+		groupKey, err = assetGroup.GroupPubKey()
+		if err != nil {
+			return nil, err
+		}
+
 		groupWitness = assetGroup.Witness
 	}
 

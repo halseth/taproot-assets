@@ -143,11 +143,11 @@ func NewLeafScriptKeyRecord(scriptKey **btcec.PublicKey) tlv.Record {
 	)
 }
 
-func NewLeafGroupKeyRecord(groupKey **GroupKey) tlv.Record {
+func NewLeafGroupKeyRecord(groupKey **btcec.PublicKey) tlv.Record {
 	const recordSize = btcec.PubKeyBytesLenCompressed
 	return tlv.MakeStaticRecord(
-		LeafGroupKey, groupKey, recordSize, GroupKeyEncoder,
-		GroupKeyDecoder,
+		LeafGroupKey, groupKey, recordSize,
+		CompressedPubKeyEncoder, CompressedPubKeyDecoder,
 	)
 }
 

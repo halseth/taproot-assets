@@ -166,7 +166,7 @@ func virtualTxOut(asset *asset.Asset) (*wire.TxOut, error) {
 	// MS-SMT containing the new asset.
 	var groupKey []byte
 	if asset.GroupKey != nil {
-		groupKey = schnorr.SerializePubKey(&asset.GroupKey.GroupPubKey)
+		groupKey = schnorr.SerializePubKey(asset.GroupKey)
 	} else {
 		var emptyKey [32]byte
 		groupKey = emptyKey[:]

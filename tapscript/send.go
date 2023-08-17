@@ -159,7 +159,10 @@ func DescribeRecipients(ctx context.Context, vPkt *tappsbt.VPacket,
 	groupKey, err := groupQuerier.QueryAssetGroup(ctx, firstInput.PrevID.ID)
 	switch {
 	case err == nil && groupKey.GroupKey != nil:
-		groupPubKey = &groupKey.GroupPubKey
+		groupPubKey, err = groupKey.GroupPubKey()
+		if err != nil {
+			return nil, err
+		}
 
 	case err != nil:
 		return nil, fmt.Errorf("unable to query asset group: %v", err)

@@ -52,12 +52,6 @@ func RandPacket(t testing.TB) *VPacket {
 	testOutputAsset := asset.RandAsset(t, asset.Normal)
 	testOutputAsset.ScriptKey = asset.NewScriptKeyBip86(keyDesc)
 
-	// The raw key won't be serialized within the asset, so let's blank it
-	// out here to get a fully, byte-by-byte comparable PSBT.
-	testAsset.GroupKey.RawKey = keychain.KeyDescriptor{}
-	testAsset.GroupKey.Witness = nil
-	testOutputAsset.GroupKey.RawKey = keychain.KeyDescriptor{}
-	testOutputAsset.GroupKey.Witness = nil
 	testOutputAsset.ScriptKey.TweakedScriptKey = nil
 	leaf1 := txscript.TapLeaf{
 		LeafVersion: txscript.BaseLeafVersion,
