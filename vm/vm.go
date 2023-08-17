@@ -3,10 +3,12 @@ package vm
 import (
 	"context"
 	"errors"
+	"fmt"
 
 	"github.com/btcsuite/btcd/btcec/v2"
 	"github.com/btcsuite/btcd/txscript"
 	"github.com/btcsuite/btcd/wire"
+	"github.com/davecgh/go-spew/spew"
 	"github.com/lightninglabs/taproot-assets/asset"
 	"github.com/lightninglabs/taproot-assets/commitment"
 	"github.com/lightninglabs/taproot-assets/mssmt"
@@ -83,6 +85,7 @@ func matchesAssetParams(newAsset, prevAsset *asset.Asset,
 
 	scriptKey := asset.ToSerialized(prevAsset.ScriptKey.PubKey)
 	if prevAssetWitness.PrevID.ScriptKey != scriptKey {
+		fmt.Printf("prevID.ScriptKey was %x,, prevAsset.ScriptKey was %x\n", prevAssetWitness.PrevID.ScriptKey, scriptKey)
 		return newErrKind(ErrScriptKeyMismatch)
 	}
 
@@ -194,7 +197,7 @@ func (vm *Engine) validateWitnessV0(virtualTx *wire.MsgTx, inputIdx uint32,
 
 	// An input MUST have a prev out and also a valid witness.
 	if witness.PrevID == nil || len(witness.TxWitness) == 0 {
-		return newErrKind(ErrInvalidTransferWitness)
+		return fmt.Errorf("hei1: %w", newErrKind(ErrInvalidTransferWitness))
 	}
 
 	// The parameters of the new and old asset much match exactly.
@@ -208,6 +211,7 @@ func (vm *Engine) validateWitnessV0(virtualTx *wire.MsgTx, inputIdx uint32,
 	virtualTxCopy := tapscript.VirtualTxWithInput(
 		virtualTx, prevAsset, inputIdx, witness.TxWitness,
 	)
+	fmt.Println("validating virtual tx", spew.Sdump(virtualTxCopy))
 
 	prevOutFetcher, err := tapscript.InputPrevOutFetcher(*prevAsset)
 	if err != nil {
@@ -216,6 +220,8 @@ func (vm *Engine) validateWitnessV0(virtualTx *wire.MsgTx, inputIdx uint32,
 		}
 		return err
 	}
+
+	fmt.Println("validating prevoutfetcher", spew.Sdump(prevOutFetcher))
 
 	// Obtain the prev out created above, we can pass in a null outpoint
 	// here as it's a canned fetcher, so it'll return the same prev out
@@ -232,10 +238,10 @@ func (vm *Engine) validateWitnessV0(virtualTx *wire.MsgTx, inputIdx uint32,
 		nil, sigHashes, prevOut.Value, prevOutFetcher,
 	)
 	if err != nil {
-		return newErrInner(ErrInvalidTransferWitness, err)
+		return fmt.Errorf("hei2: %w", newErrKind(ErrInvalidTransferWitness))
 	}
 	if err := engine.Execute(); err != nil {
-		return newErrInner(ErrInvalidTransferWitness, err)
+		return fmt.Errorf("hei33: %w", err)
 	}
 
 	return nil
@@ -248,18 +254,20 @@ func (vm *Engine) validateWitnessV0(virtualTx *wire.MsgTx, inputIdx uint32,
 func (vm *Engine) validateStateTransition(virtualTx *wire.MsgTx) error {
 	switch {
 	case len(vm.newAsset.PrevWitnesses) == 0:
+		fmt.Println("asset1", spew.Sdump(vm.newAsset))
 		return ErrNoInputs
 
 	case vm.newAsset.Type == asset.Collectible &&
 		len(vm.newAsset.PrevWitnesses) > 1:
 
-		return newErrKind(ErrInvalidTransferWitness)
+		return fmt.Errorf("hei4: %w", newErrKind(ErrInvalidTransferWitness))
 	}
 
 	for i, witness := range vm.newAsset.PrevWitnesses {
 		witness := witness
 		prevAsset, ok := vm.prevAssets[*witness.PrevID]
 		if !ok {
+			fmt.Println("asset2", spew.Sdump(vm.newAsset))
 			return ErrNoInputs
 		}
 
@@ -282,13 +290,49 @@ func (vm *Engine) validateStateTransition(virtualTx *wire.MsgTx) error {
 // Execute attempts to execute an asset's state transition to determine whether
 // it was valid or not represented by the error returned.
 func (vm *Engine) Execute() error {
+	var prevAssets commitment.InputSet
+
 	// A genesis asset should have a single witness and a PrevID of all
 	// zeros and empty witness and split commitment proof.
 	if vm.newAsset.HasGenesisWitness() {
 		if len(vm.splitAssets) > 0 || len(vm.prevAssets) > 0 {
 			return newErrKind(ErrInvalidGenesisStateTransition)
 		}
-		return nil
+
+		// Assets without group key will be short-circuited here.
+		if vm.newAsset.GroupKey == nil {
+			return nil
+		}
+
+		// TODO: verify group key
+
+		assetCopy := vm.newAsset.Copy()
+		assetCopy.PrevWitnesses = nil
+		if vm.newAsset.GroupKey != nil {
+			assetCopy.ScriptKey = asset.NewScriptKey(
+				vm.newAsset.GroupKey,
+			)
+		} else {
+			assetCopy.ScriptKey = asset.ScriptKey{}
+		}
+
+		key := asset.PrevID{
+			//		OutPoint: wire.OutPoint{}, // Empty for minting. TODO: does this make sense?
+			//		ID:       assetCopy.ID(),
+			ScriptKey: asset.ToSerialized(
+				assetCopy.ScriptKey.PubKey,
+			),
+		}
+		_ = key
+
+		prevAssets = commitment.InputSet{
+			//asset.PrevID{}:
+			key: assetCopy,
+		}
+		vm.prevAssets = prevAssets
+		vm.newAsset.PrevWitnesses[0].PrevID = &key
+	} else {
+		prevAssets = vm.prevAssets
 	}
 
 	// If we have an asset split, then we need to validate the state
@@ -303,6 +347,7 @@ func (vm *Engine) Execute() error {
 	// Now that we know we're not dealing with a genesis state transition,
 	// we'll map our set of asset inputs and outputs to the 1-input 1-output
 	// virtual transaction.
+	// TODO: state transition need prev assets to be set
 	virtualTx, inputTree, err := tapscript.VirtualTx(
 		vm.newAsset, vm.prevAssets,
 	)

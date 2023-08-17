@@ -368,6 +368,7 @@ func (f *AssetWallet) passiveAssetVPacket(passiveAsset *asset.Asset,
 // FundPacket funds a virtual transaction, selecting assets to spend in order to
 // pay the given recipient. The selected input is then added to the given
 // virtual transaction.
+// TODO:for minting, we will not actually fund the packet, but create tokens outof thin air by signing wit group key
 func (f *AssetWallet) FundPacket(ctx context.Context,
 	fundDesc *tapscript.FundingDescriptor,
 	vPkt *tappsbt.VPacket) (*FundedVPacket, error) {

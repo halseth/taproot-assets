@@ -182,7 +182,29 @@ func (p *Proof) verifyAssetStateTransition(ctx context.Context,
 
 	// Gather the set of asset inputs leading to the state transition.
 	var prevAssets commitment.InputSet
-	if prev != nil {
+	if newAsset.HasGenesisWitness() {
+		assetCopy := newAsset.Copy()
+		assetCopy.PrevWitnesses = nil
+		if newAsset.GroupKey != nil {
+			assetCopy.ScriptKey = asset.NewScriptKey(
+				&newAsset.GroupKey.GroupPubKey,
+			)
+		} else {
+			assetCopy.ScriptKey = asset.ScriptKey{}
+		}
+
+		key := asset.PrevID{
+			OutPoint: wire.OutPoint{}, // Empty for minting. TODO: does this make sense?
+			ID:       assetCopy.ID(),
+			ScriptKey: asset.ToSerialized(
+				assetCopy.ScriptKey.PubKey,
+			),
+		}
+
+		prevAssets = commitment.InputSet{
+			key: assetCopy,
+		}
+	} else if prev != nil {
 		prevAssets = commitment.InputSet{
 			asset.PrevID{
 				OutPoint: p.PrevOut,
@@ -349,6 +371,42 @@ func (p *Proof) verifyGroupKeyReveal() error {
 		return ErrGroupKeyRevealMismatch
 	}
 
+	return nil
+}
+
+// TODO: move to asset?
+func (p *Proof) verifyGenesisWitness() error {
+	a := p.Asset
+
+	if len(a.PrevWitnesses) != 1 {
+		return fmt.Errorf("invalid number of prev witnesses")
+	}
+
+	witness := a.PrevWitnesses[0]
+
+	// If prev asset input is not exactly all zeroes, this cannot be genesis
+	// witness.
+	if witness.PrevID == nil || *witness.PrevID != asset.ZeroPrevID {
+		return fmt.Errorf("unexpected prev asset input for genesis " +
+			"witness")
+	}
+
+	// If the tx witness is empty, this is an asset that doesn't support
+	// emission. In this case there cannot be any group key present.
+	if len(witness.TxWitness) == 0 {
+		if a.GroupKey != nil {
+			return fmt.Errorf("no witness provided for grouped asset")
+		}
+
+		return nil
+	}
+
+	if a.GroupKey == nil {
+		return fmt.Errorf("witness present for non-grouped asset")
+	}
+
+	// Witness is present, verify it against the group key.
+	// TODO: should be done in state transition instead?
 	return nil
 }
 

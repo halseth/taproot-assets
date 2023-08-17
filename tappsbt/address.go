@@ -2,6 +2,7 @@ package tappsbt
 
 import (
 	"fmt"
+
 	"github.com/btcsuite/btcd/btcec/v2/schnorr"
 
 	"github.com/btcsuite/btcd/wire"
@@ -13,6 +14,7 @@ import (
 // FromAddresses creates an empty virtual transaction packet from the given
 // addresses. Because sending to an address is always non-interactive, a change
 // output is also added to the packet.
+// TODO: this function creates the virtual tx when sending an asset.
 func FromAddresses(receiverAddrs []*address.Tap,
 	firstOutputIndex uint32) (*VPacket, error) {
 
@@ -67,6 +69,56 @@ func FromAddresses(receiverAddrs []*address.Tap,
 			AnchorOutputTapscriptSibling: addr.TapscriptSibling,
 		})
 	}
+
+	return pkt, nil
+}
+
+func Mint(a *asset.Asset, receiverAddr *address.Tap,
+	firstOutputIndex uint32) (*VPacket, error) {
+
+	firstAddr := receiverAddr
+	pkt := &VPacket{
+		Inputs: []*VInput{{
+			PrevID: asset.PrevID{
+				ID: a.ID(),
+			},
+		}},
+		Outputs:     make([]*VOutput, 0, 2),
+		ChainParams: firstAddr.ChainParams,
+	}
+
+	// If we are sending the full value of the input asset, or sending a
+	// collectible, we will need to create a split with un-spendable change.
+	// Since we don't have any inputs selected yet, we'll use the NUMS
+	// script key to avoid deriving a new key for each funding attempt. If
+	// we need a change output, this un-spendable script key will be
+	// identified as such and replaced with a real one during the funding
+	// process.
+	pkt.Outputs = append(pkt.Outputs, &VOutput{
+		Amount:            0,
+		Type:              TypeSplitRoot,
+		AnchorOutputIndex: 0,
+		ScriptKey:         asset.NUMSScriptKey,
+	})
+
+	// We start at output index 1 because we also have the change output
+	// above. We also just use continuous integers for the anchor output
+	// index, but start at the first one indicated by the caller.
+	addr := receiverAddr
+
+	schnorrInternalKey, _ := schnorr.ParsePubKey(
+		schnorr.SerializePubKey(&addr.InternalKey),
+	)
+	pkt.Outputs = append(pkt.Outputs, &VOutput{
+		Amount:            addr.Amount,
+		Interactive:       false,
+		AnchorOutputIndex: firstOutputIndex,
+		ScriptKey: asset.NewScriptKey(
+			&addr.ScriptKey,
+		),
+		AnchorOutputInternalKey:      schnorrInternalKey,
+		AnchorOutputTapscriptSibling: addr.TapscriptSibling,
+	})
 
 	return pkt, nil
 }

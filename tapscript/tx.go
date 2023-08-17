@@ -12,6 +12,7 @@ import (
 	"github.com/btcsuite/btcd/chaincfg/chainhash"
 	"github.com/btcsuite/btcd/txscript"
 	"github.com/btcsuite/btcd/wire"
+	"github.com/davecgh/go-spew/spew"
 	"github.com/lightninglabs/lndclient"
 	"github.com/lightninglabs/taproot-assets/asset"
 	"github.com/lightninglabs/taproot-assets/commitment"
@@ -80,17 +81,45 @@ func virtualTxIn(newAsset *asset.Asset, prevAssets commitment.InputSet) (
 	// Genesis assets shouldn't have any inputs committed, so they'll have
 	// an empty input tree.
 	isGenesisAsset := newAsset.HasGenesisWitness()
+
+	// TODO(bhandras): thread the context through.
+	ctx := context.TODO()
 	inputTree := mssmt.NewCompactedTree(mssmt.NewDefaultStore())
-	if !isGenesisAsset {
+	if isGenesisAsset {
+		assetCopy := newAsset.Copy()
+		assetCopy.PrevWitnesses = nil
+		if newAsset.GroupKey != nil {
+			assetCopy.ScriptKey = asset.NewScriptKey(
+				newAsset.GroupKey,
+			)
+		} else {
+			assetCopy.ScriptKey = asset.ScriptKey{}
+		}
+
+		key := asset.PrevID{
+			OutPoint: wire.OutPoint{}, // Empty for minting. TODO: does this make sense?
+			ID:       assetCopy.ID(),
+			ScriptKey: asset.ToSerialized(
+				assetCopy.ScriptKey.PubKey,
+			),
+		}.Hash()
+
+		leaf, err := assetCopy.Leaf()
+		if err != nil {
+			return nil, nil, err
+		}
+		_, err = inputTree.Insert(ctx, key, leaf)
+		if err != nil {
+			return nil, nil, err
+		}
+
+	} else {
 		// For each input we'll locate the asset UTXO beign spent, then
 		// insert that into a new SMT, with the key being the hash of
 		// the prevID pointer, and the value being the leaf itself.
 		inputsConsumed := make(
 			map[asset.PrevID]struct{}, len(prevAssets),
 		)
-
-		// TODO(bhandras): thread the context through.
-		ctx := context.TODO()
 
 		for _, input := range newAsset.PrevWitnesses {
 			// At this point, each input MUST have a prev ID.
@@ -304,6 +333,7 @@ func InputKeySpendSigHash(virtualTx *wire.MsgTx, input *asset.Asset,
 	if err != nil {
 		return nil, err
 	}
+	fmt.Println("signing prevoutfetcher", spew.Sdump(prevOutFetcher))
 	sigHashes := txscript.NewTxSigHashes(virtualTxCopy, prevOutFetcher)
 	return txscript.CalcTaprootSignatureHash(
 		sigHashes, sigHashType, virtualTxCopy, zeroIndex,
@@ -370,6 +400,7 @@ func CreateTaprootSignature(vIn *tappsbt.VInput, virtualTx *wire.MsgTx,
 	// then adjust depending on the input parameters.
 	spendDesc := lndclient.SignDescriptor{
 		KeyDesc: keychain.KeyDescriptor{
+			// TODO: script key of asset we point back at must be set to group key
 			PubKey: vIn.Asset().ScriptKey.RawKey.PubKey,
 		},
 		SignMethod: input.TaprootKeySpendBIP0086SignMethod,

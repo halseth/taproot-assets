@@ -12,10 +12,13 @@ import (
 	"github.com/btcsuite/btcd/btcutil/psbt"
 	"github.com/btcsuite/btcd/wire"
 	"github.com/davecgh/go-spew/spew"
+	"github.com/lightninglabs/taproot-assets/address"
 	"github.com/lightninglabs/taproot-assets/asset"
 	"github.com/lightninglabs/taproot-assets/commitment"
 	"github.com/lightninglabs/taproot-assets/fn"
 	"github.com/lightninglabs/taproot-assets/proof"
+	"github.com/lightninglabs/taproot-assets/tappsbt"
+	"github.com/lightninglabs/taproot-assets/tapscript"
 	"github.com/lightninglabs/taproot-assets/universe"
 	"github.com/lightningnetwork/lnd/chainntnfs"
 	"golang.org/x/exp/maps"
@@ -392,6 +395,7 @@ func (b *BatchCaretaker) seedlingsToAssetSprouts(ctx context.Context,
 	for _, seedlingName := range orederedSeedlings {
 		seedling := b.cfg.Batch.Seedlings[seedlingName]
 
+		// TODO: genesis point here points to the input we are spending (randomness that goes into asset_id)
 		assetGen := asset.Genesis{
 			FirstPrevOut: genesisPoint,
 			Tag:          seedling.AssetName,
@@ -405,6 +409,8 @@ func (b *BatchCaretaker) seedlingsToAssetSprouts(ctx context.Context,
 		if seedling.Meta != nil {
 			assetGen.MetaHash = seedling.Meta.MetaHash()
 		}
+
+		// TODO: at this point the asset_id has been determined, and can be signed.
 
 		scriptKey, err := b.cfg.KeyRing.DeriveNextKey(
 			ctx, asset.TaprootAssetsKeyFamily,
@@ -436,8 +442,8 @@ func (b *BatchCaretaker) seedlingsToAssetSprouts(ctx context.Context,
 
 		if groupInfo != nil {
 			sproutGroupKey, err = asset.DeriveGroupKey(
-				b.cfg.GenSigner, groupInfo.GroupKey.RawKey,
-				*groupInfo.Genesis, &assetGen,
+				groupInfo.GroupKey.RawKey, asset.EmptyScriptRoot,
+				*groupInfo.Genesis,
 			)
 			if err != nil {
 				return nil, fmt.Errorf("unable to"+
@@ -457,9 +463,11 @@ func (b *BatchCaretaker) seedlingsToAssetSprouts(ctx context.Context,
 				return nil, fmt.Errorf("unable to"+
 					"derive group key: %w", err)
 			}
+			// here group key is derived, and the asset_id is signed.
+			// TODO: instead of deriving group key, must sign the virtual minting transaction.
 			sproutGroupKey, err = asset.DeriveGroupKey(
-				b.cfg.GenSigner, rawGroupKey,
-				assetGen, nil,
+				rawGroupKey, asset.EmptyScriptRoot,
+				assetGen,
 			)
 			if err != nil {
 				return nil, fmt.Errorf("unable to"+
@@ -482,6 +490,8 @@ func (b *BatchCaretaker) seedlingsToAssetSprouts(ctx context.Context,
 			amount = 1
 		}
 
+		// TODO: create VirtualPacket (FromAddresses)
+
 		newAsset, err := asset.New(
 			assetGen, amount, 0, 0,
 			asset.NewScriptKeyBip86(scriptKey), sproutGroupKey,
@@ -490,6 +500,23 @@ func (b *BatchCaretaker) seedlingsToAssetSprouts(ctx context.Context,
 			return nil, fmt.Errorf("unable to create new asset: %w",
 				err)
 		}
+		addr := &address.Tap{}
+		vPkt, err := tappsbt.Mint(newAsset, addr, 1)
+		if err != nil {
+			return nil, fmt.Errorf("unable to create virtual transaction "+
+				"from addresses: %w", err)
+		}
+		_ = vPkt
+
+		err = tapscript.SignVirtualTransaction(
+			vPkt, b.cfg.Signer, b.cfg.TxValidator,
+		)
+		if err != nil {
+			return nil, fmt.Errorf("unable to generate Taproot Asset "+
+				"witness data: %w", err)
+		}
+
+		// TODO: these assets must have a prevWitness signing a virtual tx with the group key.
 
 		newAssets = append(newAssets, newAsset)
 	}
@@ -497,6 +524,7 @@ func (b *BatchCaretaker) seedlingsToAssetSprouts(ctx context.Context,
 	// Now that we have all our assets created, we'll make a new
 	// Taproot asset commitment, which commits to all the assets we
 	// created above in a new root.
+	// TODO: if prev witness is set correclty at this point (signature over virtualTX with group key), this commitment will be correct
 	return commitment.FromAssets(newAssets...)
 }
 
@@ -551,7 +579,8 @@ func (b *BatchCaretaker) stateStep(currentState BatchState) (BatchState, error) 
 			b.anchorOutputIndex = 1
 		}
 
-		// First, we'll turn all the seedlings into actual taproot assets.
+		// First, we'll turn all the seedlinggs into actual taproot assets.
+		// TODO: at this point we have everything we need to be able to sign a virtual tx for each asset.
 		tapCommitment, err := b.seedlingsToAssetSprouts(
 			ctx, genesisPoint, b.anchorOutputIndex,
 		)
@@ -565,6 +594,8 @@ func (b *BatchCaretaker) stateStep(currentState BatchState) (BatchState, error) 
 		// With the commitment Taproot Asset root SMT constructed, we'll
 		// map that into the tapscript root we'll insert into the
 		// genesis transaction.
+		// TODO:Here is the bitcoin tx that commits to the minted assets created.
+		// just need the newAssets in here correctly point to correct prev_id, and have witness for the virtual tx (currently they have blank witness)
 		genesisScript, err := b.cfg.Batch.genesisScript()
 		if err != nil {
 			return 0, fmt.Errorf("unable to create genesis "+

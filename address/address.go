@@ -81,6 +81,7 @@ const (
 
 // Tap represents a Taproot Asset address. Taproot Asset addresses specify an
 // asset, pubkey, and amount.
+// TODO: must represent asset mints using this?
 type Tap struct {
 	// ChainParams is the reference to the chain parameters that were used
 	// to encode the Taproot Asset address.

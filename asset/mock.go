@@ -2,6 +2,7 @@ package asset
 
 import (
 	"bytes"
+	"crypto/sha256"
 	"encoding/hex"
 	"testing"
 
@@ -28,17 +29,19 @@ func RandGenesis(t testing.TB, assetType Type) Genesis {
 }
 
 // RandGroupKey creates a random group key for testing.
-func RandGroupKey(t testing.TB, genesis Genesis) *GroupKey {
+func RandGroupKey(t testing.TB, genesis Genesis) (*GroupKey, *btcec.PrivateKey) {
 	privateKey := test.RandPrivKey(t)
 
-	genSigner := NewRawKeyGenesisSigner(privateKey)
+	// TODO: must correctly tweak the group priv key before signing
 
-	groupKey, err := DeriveGroupKey(
-		genSigner, test.PubToKeyDesc(privateKey.PubKey()),
-		genesis, nil,
-	)
+	scriptRoot := [sha256.Size]byte{}
+	groupKey, err := DeriveGroupKey(test.PubToKeyDesc(privateKey.PubKey()), scriptRoot, genesis)
 	require.NoError(t, err)
-	return groupKey
+
+	//groupKey.RawPrivKey = *privateKey
+	//groupPubKey, _ := groupKey.GroupPubKey(genesis.ID())
+
+	return groupKey, privateKey
 }
 
 // RandGroupKeyWithSigner creates a random group key for testing, and provides
@@ -46,11 +49,8 @@ func RandGroupKey(t testing.TB, genesis Genesis) *GroupKey {
 func RandGroupKeyWithSigner(t testing.TB, genesis Genesis) (*GroupKey, []byte) {
 	privateKey := test.RandPrivKey(t)
 
-	genSigner := NewRawKeyGenesisSigner(privateKey)
-	groupKey, err := DeriveGroupKey(
-		genSigner, test.PubToKeyDesc(privateKey.PubKey()),
-		genesis, nil,
-	)
+	scriptRoot := [sha256.Size]byte{}
+	groupKey, err := DeriveGroupKey(test.PubToKeyDesc(privateKey.PubKey()), scriptRoot, genesis)
 	require.NoError(t, err)
 
 	return groupKey, privateKey.Serialize()
@@ -79,7 +79,7 @@ func RandAsset(t testing.TB, assetType Type) *Asset {
 	t.Helper()
 
 	genesis := RandGenesis(t, assetType)
-	groupKey := RandGroupKey(t, genesis)
+	groupKey, _ := RandGroupKey(t, genesis)
 	scriptKey := RandScriptKey(t)
 
 	groupPubKey, _ := groupKey.GroupPubKeyF(genesis.ID())

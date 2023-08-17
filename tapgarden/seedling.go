@@ -70,6 +70,7 @@ type SeedlingUpdates chan SeedlingUpdate
 
 // Seedling is an adolescent Taproot asset that will one day bloom into a fully
 // grown plant.
+// TODO: this contains the data we need to create a virtual tx for the asset.
 type Seedling struct {
 	// AssetType is the type of the asset.
 	AssetType asset.Type

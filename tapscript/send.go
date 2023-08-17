@@ -606,10 +606,12 @@ func SignVirtualTransaction(vPkt *tappsbt.VPacket, signer Signer,
 	for idx := range vPkt.Inputs {
 		input := vPkt.Inputs[idx]
 		prevAssets[input.PrevID] = input.Asset()
+		// TODO: here we'll have a copy of the minted asset.
 	}
 
 	// Create a Taproot Asset virtual transaction representing the asset
 	// transfer.
+	// TODO: Here we'll create a virtual tx for the minted asset.
 	virtualTx, _, err := VirtualTx(newAsset, prevAssets)
 	if err != nil {
 		return err
@@ -636,6 +638,7 @@ func SignVirtualTransaction(vPkt *tappsbt.VPacket, signer Signer,
 				"signature: %w", err)
 		}
 
+		// TODO: here the witness will the viutual tx signed with the group key
 		newAsset.PrevWitnesses[idx].TxWitness = newWitness
 	}
 

@@ -10,6 +10,7 @@ import (
 	"github.com/lightninglabs/taproot-assets/asset"
 	"github.com/lightninglabs/taproot-assets/fn"
 	"github.com/lightninglabs/taproot-assets/proof"
+	"github.com/lightninglabs/taproot-assets/tapscript"
 	"github.com/lightninglabs/taproot-assets/universe"
 	"github.com/lightningnetwork/lnd/ticker"
 	"golang.org/x/exp/maps"
@@ -20,6 +21,12 @@ import (
 type GardenKit struct {
 	// Wallet is an active on chain wallet for the target chain.
 	Wallet WalletAnchor
+
+	// Signer implements the Taproot Asset level signing we need to sign a
+	// virtual transaction.
+	Signer tapscript.Signer
+
+	TxValidator tapscript.TxValidator
 
 	// ChainBridge provides access to the chain for confirmation
 	// notification, and other block related actions.
@@ -687,12 +694,19 @@ func (c *ChainPlanter) prepAssetSeedling(ctx context.Context,
 	// If emission is enabled and a group key is specified, we need to
 	// make sure the asset types match and that we can sign with that key.
 	if req.HasGroupKey() {
+		groupPubKey, err := req.GroupInfo.GroupPubKey()
+		if err != nil {
+			return err
+		}
 		groupInfo, err := c.cfg.Log.FetchGroupByGroupKey(
-			ctx, &req.GroupInfo.GroupPubKey,
+			ctx, groupPubKey,
 		)
 		if err != nil {
-			groupKeyBytes := req.GroupInfo.GroupPubKey.
-				SerializeCompressed()
+			groupPubKey, err := req.GroupInfo.GroupPubKey()
+			if err != nil {
+				return err
+			}
+			groupKeyBytes := groupPubKey.SerializeCompressed()
 			return fmt.Errorf("group key %x not found: %w",
 				groupKeyBytes, err,
 			)
